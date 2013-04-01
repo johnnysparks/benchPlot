@@ -61,6 +61,7 @@ class CLITimePlot {
         $this->maxX = -1 * $this->minX;
         $this->maxY = -1 * $this->minY;
         $this->type = in_array($type, $this->types) ? $type : 'realTime';
+        $this->setXLabel("Time (seconds)");
     }
 
     public function setYLabel( $label ){
@@ -89,10 +90,7 @@ class CLITimePlot {
 
 
     public function nextPoint( $y ){
-        // default to microseconds for time series (math reasons)
-        //if(!isset($this->startTime)) $this->startTime = microtime(1) * 1000000;
         if(!isset($this->startTime)) $this->startTime = microtime(1);
-        //$x = microtime(1) *1000000 - $this->startTime;
         $x = microtime(1) - $this->startTime;
         $this->addPoint( $x, $y );
     }
@@ -121,27 +119,47 @@ class CLITimePlot {
         return $this->maxY - $this->minY;
     }
 
-    public function normalize(){
-        $graphwidth = $this->cols - 2;
-        $datawidth  = count($this->data);
-        $height     = $this->rows - 2;
-        $width      = 0;
+    public function x2bin($x){
+        return (($x - $this->minX) / $this->xRange()) * $this->width;
+    }
 
-        if( $datawidth >= $graphwidth ){
-            $width = $graphwidth;
-        } else {
-            $width = $datawidth + 1;
+    public function bin2x($bin){
+        return (($bin / $this->width) * $this->xRange()) + $this->minX;
+    }
+
+    public function y2norm($y){
+        return (($y - $this->minY) / $this->yRange()) * $this->height;
+    }
+
+    public function norm2y($norm){
+        return (($y - $this->minY) / $this->yRange()) * $this->height;
+    }
+
+    public function normalize(){
+        $datawidth    = count($this->data);
+        $this->height = $this->rows - 2;
+        $this->width  = $this->cols - 2;
+
+        if( $datawidth < $this->width ){
+            $this->width = $datawidth + 1;
         }
 
         $bins  = array();
 
         foreach( $this->data as $point => $xy){
             $x = $xy[0];
-            $norm = (($x - $this->minX) / $this->xRange()) * $width;
-            $bin = floor( $norm );
-            if($bin == $width) $bin = $bin - 1; // fill last bin with maxX value
+            $bin = round( $this->x2bin( $x ) );
+            if($bin == $this->width) $bin = $bin - 1; // fill last bin with maxX value
             $bins[$bin] = isset($bins[$bin]) ? $bins[$bin] : array();
             $bins[$bin][] = $xy;
+        }
+
+        // fill up empty bins
+        $binLen = max(array_keys($bins));
+        while($binLen--){
+            if(!isset($bins[$binLen])){
+                $bins[$binLen] = array(array($this->bin2x( $binLen ), $this->minY ));
+            }
         }
 
         // reset the normalized data array
@@ -163,7 +181,7 @@ class CLITimePlot {
         foreach( $this->norm as $point => $xy){
             $x = $xy[0];
             $y = $xy[1];
-            $ny = (($y - $this->minY) / $this->yRange()) * $height;
+            $ny = (($y - $this->minY) / $this->yRange()) * $this->height;
             $this->norm[$point] = array($x, $ny);
         }
     }
@@ -181,13 +199,11 @@ class CLITimePlot {
         $this->fillUp(    1, 1, $this->getYAxis());
         $this->fillRight( 1, 1, $this->getXAxis());
 
-        for($col=0; $col < $this->cols; $col++){
-            if(isset($this->norm[$col])){
-                $x = $this->norm[$col][0];
-                $y = $this->norm[$col][1];
-                if((int)$y > 0){
-                    $this->fillUp(2, $col+2, array_fill(0, $y, $xyc));
-                }
+        for($col=0; $col < $this->width; $col++){
+            $x = $this->norm[$col][0];
+            $y = $this->norm[$col][1];
+            if((int)$y > 0){
+                $this->fillUp(2, $col+2, array_fill(0, $y, $xyc));
             }
         }
     }
@@ -248,14 +264,13 @@ class CLITimePlot {
 
     public function getYAxis(){
         $fill     = $this->c($this->plotChars['vert'], $this->plotColors['vert']);
-        $height   = $this->rows - 2;
         $markSize = 5;
         $row      = 0;
         $marks    = array();
 
         while($row < $this->rows - 2){
-            //$row    = (($realY - $this->minY) / $this->yRange()) * $height;
-            $realY  = ($row / $height) * $this->yRange() + $this->minY;
+            //$row    = (($realY - $this->minY) / $this->yRange()) * $this->height;
+            $realY  = ($row / $this->height) * $this->yRange() + $this->minY;
             $val    = $this->metricify( $realY );
             $mark   = $this->colorEach($val, $this->plotColors['mark']);
             $formed = array_merge( $mark, array_fill(count($mark), $markSize - count($mark), $fill));
@@ -307,17 +322,3 @@ class CLITimePlot {
         echo chr(27) ."[".$this->rows."A"; // first row
     }
 }
-
-
-// test
-$ctp = new CLITimePlot(10, 20);
-
-$ctp->setXLabel("Time (seconds)");
-$ctp->setYLabel("ops/sec");
-
-for($i = 10;$i;$i--){ $ctp->nextPoint( $i ); }
-
-$ctp->show();
-
-
-?>
