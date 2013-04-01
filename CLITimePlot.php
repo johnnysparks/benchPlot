@@ -7,7 +7,7 @@ class CLITimePlot {
     private $plotChars = array(
         'vert' => '|',
         'hori' => '_',
-        'bar'  => 'H',
+        'bar'  => '.',
         'xy'   => 'x',
         'label'=> 'L'
     );
@@ -24,11 +24,11 @@ class CLITimePlot {
     private $xLabel;
     private $yLabel;
 
-    private $minX = PHP_INT_MAX;
-    private $minY = PHP_INT_MAX;
+    private $_minX = PHP_INT_MAX;
+    private $_minY = PHP_INT_MAX;
 
-    private $maxX;
-    private $maxY;
+    private $_maxX;
+    private $_maxY;
 
     private $types = array('realTime');
     private $type  = 'realTime';
@@ -58,8 +58,10 @@ class CLITimePlot {
     public function __construct( $rows = 30, $cols = 100, $type = 'realTime'){
         $this->rows = ($rows >= 10 && $rows <= 100)  ? $rows : 30;
         $this->cols = ($cols >= 20 && $cols <= 1000) ? $cols : 100;
-        $this->maxX = -1 * $this->minX;
-        $this->maxY = -1 * $this->minY;
+
+        $this->maxX(-1 * $this->_minX);
+        $this->maxY(-1 * $this->_minY);
+
         $this->type = in_array($type, $this->types) ? $type : 'realTime';
         $this->setXLabel("Time (seconds)");
     }
@@ -80,10 +82,6 @@ class CLITimePlot {
         }
     }
 
-    public function pP( $type ){
-        echo "\033[" . $this->colors[ $this->plotColors[$type] ] . "m" . $this->plotChars[$type] . "\033[0m";
-    }
-
     public function c( $s, $color ){
         return "\033[" . $this->colors[ $color ] . "m" . $s . "\033[0m";
     }
@@ -96,10 +94,10 @@ class CLITimePlot {
     }
 
     public function addPoint( $x, $y ){
-        if($x > $this->maxX) $this->maxX = $x;
-        if($y > $this->maxY) $this->maxY = $y;
-        if($x < $this->minX) $this->minX = $x;
-        if($y < $this->minY) $this->minY = $y;
+        if($x > $this->maxX()) $this->maxX($x);
+        if($y > $this->maxY()) $this->maxY($y);
+        if($x < $this->minX()) $this->minX($x);
+        if($y < $this->minY()) $this->minY($y);
 
         $this->data[] = array($x, $y);
     }
@@ -111,28 +109,53 @@ class CLITimePlot {
         }
     }
 
-    public function xRange(){
-        return $this->maxX - $this->minX;
+    public function maxX( $set = false ){
+        if($set !== false)   $this -> _maxX = $set;
+        if($this->_maxX <  0) return $this->_maxX * 0.9;
+        if($this->_maxX >= 0) return $this->_maxX * 1.1;
     }
 
+    public function maxY( $set = false ){
+        if($set !== false)   $this -> _maxY = $set;
+        if($this->_maxY <  0) return $this->_maxY * 0.9;
+        if($this->_maxY >= 0) return $this->_maxY * 1.1;
+    }
+
+    public function minX( $set = false ){
+        if($set !== false)   $this -> _minX = $set;
+        if($this->_minX >  0) return $this->_minX * 0.9;
+        if($this->_minX <= 0) return $this->_minX * 1.1;
+    }
+
+    public function minY( $set = false ){
+        if($set !== false)   $this -> _minY = $set;
+        if($this->_minY >  0) return $this->_minY * 0.9;
+        if($this->_minY <= 0) return $this->_minY * 1.1;
+    }
+
+    public function xRange(){
+        return $this->maxX() - $this->minX();
+    }
+
+
     public function yRange(){
-        return $this->maxY - $this->minY;
+        return $this->maxY() - $this->minY();
     }
 
     public function x2bin($x){
-        return (($x - $this->minX) / $this->xRange()) * $this->width;
+        return (($x - $this->minX()) / $this->xRange()) * $this->width;
     }
 
     public function bin2x($bin){
-        return (($bin / $this->width) * $this->xRange()) + $this->minX;
+        return (($bin / $this->width) * $this->xRange()) + $this->minX();
     }
 
     public function y2norm($y){
-        return (($y - $this->minY) / $this->yRange()) * $this->height;
+        return (($y - $this->minY()) / $this->yRange()) * $this->height;
     }
 
     public function norm2y($norm){
-        return (($y - $this->minY) / $this->yRange()) * $this->height;
+        return (($norm / $this->height) * $this->yRange()) + $this->minY();
     }
 
     public function normalize(){
@@ -158,7 +181,7 @@ class CLITimePlot {
         $binLen = max(array_keys($bins));
         while($binLen--){
             if(!isset($bins[$binLen])){
-                $bins[$binLen] = array(array($this->bin2x( $binLen ), $this->minY ));
+                $bins[$binLen] = array(array($this->bin2x( $binLen ), $this->minY() ));
             }
         }
 
@@ -179,10 +202,8 @@ class CLITimePlot {
 
         // now normalize the Y values
         foreach( $this->norm as $point => $xy){
-            $x = $xy[0];
-            $y = $xy[1];
-            $ny = (($y - $this->minY) / $this->yRange()) * $this->height;
-            $this->norm[$point] = array($x, $ny);
+            $ny = $this->y2norm( $xy[1] );
+            $this->norm[$point] = array($xy[0], $ny);
         }
     }
 
@@ -196,14 +217,16 @@ class CLITimePlot {
         $this->fillDown(  $this->rows - 1, 0, $this->colorEach( $this->yLabel, $this->plotColors['label'] ));
         $this->fillRight( 0,               0, $this->colorEach( $this->xLabel, $this->plotColors['label'] ));
 
-        $this->fillUp(    1, 1, $this->getYAxis());
-        $this->fillRight( 1, 1, $this->getXAxis());
+        $this->fillDown(  $this->rows - 1, 1, $this->getYAxis());
+        $this->fillRight( 1,               1, $this->getXAxis());
 
         for($col=0; $col < $this->width; $col++){
-            $x = $this->norm[$col][0];
-            $y = $this->norm[$col][1];
-            if((int)$y > 0){
-                $this->fillUp(2, $col+2, array_fill(0, $y, $xyc));
+            if(isset($this->norm[$col][0])){
+                $x = $this->norm[$col][0];
+                $y = $this->norm[$col][1];
+                if((int)$y > 0){
+                    $this->fillUp(2, $col+2, array_fill(0, $y, $xyc));
+                }
             }
         }
     }
@@ -259,43 +282,52 @@ class CLITimePlot {
             }
             $col += $markSize;
         }
-        return $marks;
+        return array_slice($marks, 0, $this->width);
     }
 
     public function getYAxis(){
         $fill     = $this->c($this->plotChars['vert'], $this->plotColors['vert']);
         $markSize = 5;
-        $row      = 0;
+        $row      = $this->height;
         $marks    = array();
 
-        while($row < $this->rows - 2){
-            //$row    = (($realY - $this->minY) / $this->yRange()) * $this->height;
-            $realY  = ($row / $this->height) * $this->yRange() + $this->minY;
+        while($row > 0){
+            $realY  = $this->norm2y( $row );
             $val    = $this->metricify( $realY );
             $mark   = $this->colorEach($val, $this->plotColors['mark']);
             $formed = array_merge( $mark, array_fill(count($mark), $markSize - count($mark), $fill));
             $marks  = array_merge( $marks, $formed);
-            $row   += $markSize;
+            $row   -= $markSize;
         }
-        return $marks;
+        return array_slice($marks, 0, $this->height);
     }
 
-    public function metricify( $number ){
+    public function metricify( $n ){
         $out = '';
-        if($number >= 1000000){
-            $number = round($number / 1000000);
-            $out    = $number."M";
-        } elseif($number >= 1000){
-            $number = round($number / 1000);
-            $out    = $number."K";
-        } elseif($number <= .001){
-            $number = round($number * 1000000);
-            $out    = $number."u";
-        } elseif($number <= .1){
-            $number = round($number * 1000);
-            $out    = $number."m";
+        if($n < 0){
+            $out = '-';
+            $n = -1 * $n;
+        }
+        if($n >= 1000000000){
+            $n = round($n / 1000000000);
+            $out   .= $n."G";
+        } elseif($n >= 1000000){
+            $n = round($n / 1000000);
+            $out   .= $n."M";
+        } elseif($n >= 1000){
+            $n = round($n / 1000);
+            $out   .= $n."K";
+        } elseif($n <= .000001){
+            $n = round($n * 1000000000);
+            $out   .= $n."n";
+        } elseif($n <= .001){
+            $n = round($n * 1000000);
+            $out   .= $n."u";
+        } elseif($n <= .1){
+            $n = round($n * 1000);
+            $out   .= $n."m";
         } else {
-            $out = round($number);
+            $out .= round($n);
         }
 
         return (string)$out;
