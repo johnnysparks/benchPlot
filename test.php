@@ -6,18 +6,9 @@ require_once('./CLITimePlot.php');
 $ctp = new CLITimePlot();
 $ctp->setYLabel("some ints");
 
-$i = 1000;
-while($i--) { usleep(1000); $ctp->nextPoint( 1000 ); }
-$ctp->show();
-
-$i = 1000;
-while($i--) { usleep(1000); $ctp->nextPoint( -1000 ); }
-$ctp->show();
-
-$i = 1000;
-while($i--) { usleep(1000); $ctp->nextPoint( 1000 ); }
-$ctp->show();
-
-$i = 1000;
-while($i--) { usleep(1000); $ctp->nextPoint( -1000 ); }
-$ctp->show();
+$i = 10000;
+while($i--) {
+    $val = sin( $i / (2 * pi() * 10)) * 10;
+    $ctp->nextPoint( $val );
+    if($i % 1000 == 0) $ctp->show();
+}

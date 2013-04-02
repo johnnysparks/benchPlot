@@ -7,7 +7,7 @@ class CLITimePlot {
     private $plotChars = array(
         'vert' => '|',
         'hori' => '_',
-        'bar'  => '.',
+        'bar'  => "▍",
         'xy'   => 'x',
         'label'=> 'L'
     );
@@ -34,9 +34,9 @@ class CLITimePlot {
     private $type  = 'realTime';
 
     private $graph;
-    private $graphASCII;
 
     private $startTime;
+    private $renderTime = 0;
 
     private $data    = array();
     private $norm    = array();
@@ -89,7 +89,7 @@ class CLITimePlot {
 
     public function nextPoint( $y ){
         if(!isset($this->startTime)) $this->startTime = microtime(1);
-        $x = microtime(1) - $this->startTime;
+        $x = microtime(1) - $this->startTime - $this->renderTime;
         $this->addPoint( $x, $y );
     }
 
@@ -334,6 +334,7 @@ class CLITimePlot {
     }
 
     public function show(){
+        $lastRenderTimeStart = microtime(1);
 
         $this->normalize();
         $this->buildGraph();
@@ -347,6 +348,7 @@ class CLITimePlot {
             echo "\n";
         }
         $this->isPrinted = true;
+        $this->renderTime += microtime(1) - $lastRenderTimeStart;
     }
 
     public function resetOutput(){
