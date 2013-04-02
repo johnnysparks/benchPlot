@@ -1,6 +1,6 @@
 <?php
 
-class CLITimePlot {
+class BenchPlot {
     private $rows;
     private $cols;
 
